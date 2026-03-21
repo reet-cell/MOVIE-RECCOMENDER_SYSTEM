@@ -1,98 +1,86 @@
-import numpy as np # linear algebra
-import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
-
-# Input data files are available in the read-only "../input/" directory
-# For example, running this (by clicking run or pressing Shift+Enter) will list all files under the input directory
-
-
-
-# You can write up to 20GB to the current directory (/kaggle/working/) that gets preserved as output when you create a version using "Save & Run All" 
-# You can also write temporary files to /kaggle/temp/, but they won't be saved outside of the current session
-
-movies = pd.read_csv('tmdb_5000_movies.csv')
-credits = pd.read_csv('tmdb_5000_credits.csv') 
-
-
-
-movies = movies.merge(credits,on='title')
-movies.head()
-# budget
-# homepage
-# id
-# original_language
-# original_title
-# popularity
-# production_comapny
-# production_countries
-# release-date(not sure)
-movies = movies[['movie_id','title','overview','genres','keywords','cast','crew']]
-import ast
-def convert(text):
-    L = []
-    for i in ast.literal_eval(text):
-        L.append(i['name']) 
-    return L 
-movies.dropna(inplace=True)
-movies['genres'] = movies['genres'].apply(convert)
-
-movies['keywords'] = movies['keywords'].apply(convert)
-
-import ast
-
-def convert3(text):
-    L = []
-    counter = 0
-    for i in ast.literal_eval(text):
-        if counter < 3:
-            L.append(i['name'])
-        counter+=1
-    return L 
-movies['cast'] = movies['cast'].apply(convert)
-
-movies['cast'] = movies['cast'].apply(lambda x:x[0:3])
-def fetch_director(text):
-    L = []
-    for i in ast.literal_eval(text):
-        if i['job'] == 'Director':
-            L.append(i['name'])
-    return L 
-movies['crew'] = movies['crew'].apply(fetch_director)
-#movies['overview'] = movies['overview'].apply(lambda x:x.split())
-movies.sample(5)
-
-def collapse(L):
-    L1 = []
-    for i in L:
-        L1.append(i.replace(" ",""))
-    return L1
-movies['cast'] = movies['cast'].apply(collapse)
-movies['crew'] = movies['crew'].apply(collapse)
-movies['genres'] = movies['genres'].apply(collapse)
-movies['keywords'] = movies['keywords'].apply(collapse)
-
-movies['overview'] = movies['overview'].apply(lambda x:x.split())
-movies['tags'] = movies['overview'] + movies['genres'] + movies['keywords'] + movies['cast'] + movies['crew']
-new = movies.drop(columns=['overview','genres','keywords','cast','crew'])
-#new.head()
-new['tags'] = new['tags'].apply(lambda x: " ".join(x))
-
-from sklearn.feature_extraction.text import CountVectorizer
-cv = CountVectorizer(max_features=5000,stop_words='english')
-    
-vector = cv.fit_transform(new['tags']).toarray()
-vector.shape
-from sklearn.metrics.pairwise import cosine_similarity
-similarity = cosine_similarity(vector)
-similarity
-new[new['title'] == 'The Lego Movie'].index[0]
-def recommend(movie):
-    index = new[new['title'] == movie].index[0]
-    distances = sorted(list(enumerate(similarity[index])),reverse=True,key = lambda x: x[1])
-    for i in distances[1:6]:
-        print(new.iloc[i[0]].title)
-        
-    
-
+iimport pandas as pd
+import streamlit as st
 import pickle
-pickle.dump(new,open('movie_list.pkl','wb'))
-pickle.dump(similarity,open('similarity.pkl','wb'))
+import os
+import requests
+import gdown
+
+# ---------------- GOOGLE DRIVE DOWNLOAD FUNCTION ----------------
+def download_file(file_id, filename):
+    if not os.path.exists(filename):
+        with st.spinner(f"Downloading {filename}... ⏳"):
+            url = f"https://drive.google.com/uc?id={file_id}"
+            gdown.download(url, filename, quiet=True, fuzzy=True)
+
+# ---------------- FILE IDS ----------------
+SIMILARITY_ID = "1w9X0e7EXcW-zVl5Yp7st85blIUotc0t7"
+MOVIE_ID = "1EMhqpUsfSO2iGOUO5432es8eRuTHqg3Q"
+
+# ---------------- DOWNLOAD FILES ----------------
+download_file(SIMILARITY_ID, "similarity.pkl")
+download_file(MOVIE_ID, "movie_list.pkl")
+
+# ---------------- LOAD FILES ----------------
+try:
+    with open("similarity.pkl", "rb") as f:
+        similarity = pickle.load(f)
+
+    with open("movie_list.pkl", "rb") as f:
+        movie = pickle.load(f)
+
+    movie = pd.DataFrame(movie)
+
+except Exception as e:
+    st.error(f"❌ Failed to load model files: {e}")
+    st.stop()
+
+# ---------------- UI ----------------
+st.title("🎬 Movie Recommender System")
+
+selected_movie_name = st.selectbox(
+    'Select a movie 🎥',
+    movie['title'].values
+)
+
+# ---------------- FETCH POSTER ----------------
+def fetch_poster(movie_id):
+    url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key=f07164adf1a7def0170eeafeeb6bb25a"
+    response = requests.get(url)
+    data = response.json()
+
+    if 'poster_path' in data and data['poster_path']:
+        return "https://image.tmdb.org/t/p/w500/" + data['poster_path']
+    else:
+        return "https://via.placeholder.com/500x750?text=No+Image"
+
+# ---------------- RECOMMEND FUNCTION ----------------
+def recommend(movie_name):
+    movie_index = movie[movie['title'] == movie_name].index[0]
+    distances = similarity[movie_index]
+
+    movies_list = sorted(
+        list(enumerate(distances)),
+        reverse=True,
+        key=lambda x: x[1]
+    )[1:6]
+
+    recommended_movie = []
+    recommended_posters = []
+
+    for i in movies_list:
+        movie_id = movie.iloc[i[0]].movie_id
+        recommended_movie.append(movie.iloc[i[0]].title)
+        recommended_posters.append(fetch_poster(movie_id))
+
+    return recommended_movie, recommended_posters
+
+# ---------------- BUTTON ----------------
+if st.button('🎯 Show Recommendations'):
+    names, posters = recommend(selected_movie_name)
+
+    cols = st.columns(5)
+
+    for i in range(5):
+        with cols[i]:
+            st.markdown(f"**{names[i]}**")
+            st.image(posters[i])
