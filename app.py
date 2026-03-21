@@ -3,27 +3,29 @@ import streamlit as st
 import pickle
 import os
 import requests
+import gdown
 
 # ---------------- GOOGLE DRIVE DOWNLOAD FUNCTION ----------------
 def download_file(file_id, filename):
     if not os.path.exists(filename):
-        url = f"https://drive.google.com/uc?export=download&id={file_id}"
-        response = requests.get(url)
-        
-        with open(filename, "wb") as f:
-            f.write(response.content)
+        url = f"https://drive.google.com/uc?id={file_id}"
+        gdown.download(url, filename, quiet=False)
 
 # ---------------- DOWNLOAD FILES ----------------
 download_file("1w9X0e7EXcW-zVl5Yp7st85blIUotc0t7", "similarity.pkl")
 download_file("1EMhqpUsfSO2iGOUO5432es8eRuTHqg3Q", "movie_list.pkl")
+
+# ---------------- DEBUG (OPTIONAL) ----------------
+st.write("Files in directory:", os.listdir())
 
 # ---------------- LOAD FILES ----------------
 try:
     similarity = pickle.load(open('similarity.pkl', 'rb'))
     movie = pickle.load(open('movie_list.pkl', 'rb'))
     movie = pd.DataFrame(movie)
-except:
-    st.error("❌ Failed to load model files. Check Google Drive links or permissions.")
+
+except Exception as e:
+    st.error(f"❌ Failed to load model files: {e}")
     st.stop()
 
 # ---------------- UI ----------------
