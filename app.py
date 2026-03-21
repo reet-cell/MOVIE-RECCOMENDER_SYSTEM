@@ -16,7 +16,6 @@ download_file("1w9X0e7EXcW-zVl5Yp7st85blIUotc0t7", "similarity.pkl")
 download_file("1EMhqpUsfSO2iGOUO5432es8eRuTHqg3Q", "movie_list.pkl")
 
 # ---------------- DEBUG (OPTIONAL) ----------------
-st.write("Files in directory:", os.listdir())
 
 # ---------------- LOAD FILES ----------------
 try:
