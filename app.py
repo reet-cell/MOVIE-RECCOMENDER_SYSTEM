@@ -1,39 +1,46 @@
-
 import pandas as pd
 import streamlit as st
 import pickle
 import os
 import requests
 
-# ---------------- DOWNLOAD FILE FUNCTION ----------------
-def download_file(url, filename):
+# ---------------- GOOGLE DRIVE DOWNLOAD FUNCTION ----------------
+def download_file(file_id, filename):
     if not os.path.exists(filename):
-        r = requests.get(url)
-        with open(filename, 'wb') as f:
-            f.write(r.content)
+        url = f"https://drive.google.com/uc?export=download&id={file_id}"
+        response = requests.get(url)
+        
+        with open(filename, "wb") as f:
+            f.write(response.content)
 
 # ---------------- DOWNLOAD FILES ----------------
-download_file("https://drive.google.com/uc?id=1w9X0e7EXcW-zVl5Yp7st85blIUotc0t7", "similarity.pkl")
-download_file("https://drive.google.com/uc?id=1EMhqpUsfSO2iGOUO5432es8eRuTHqg3Q", "movie_list.pkl")
+download_file("1w9X0e7EXcW-zVl5Yp7st85blIUotc0t7", "similarity.pkl")
+download_file("1EMhqpUsfSO2iGOUO5432es8eRuTHqg3Q", "movie_list.pkl")
 
 # ---------------- LOAD FILES ----------------
-movie = pickle.load(open('movie_list.pkl', 'rb'))
-similarity = pickle.load(open('similarity.pkl', 'rb'))
-
-movie = pd.DataFrame(movie)
+try:
+    similarity = pickle.load(open('similarity.pkl', 'rb'))
+    movie = pickle.load(open('movie_list.pkl', 'rb'))
+    movie = pd.DataFrame(movie)
+except:
+    st.error("❌ Failed to load model files. Check Google Drive links or permissions.")
+    st.stop()
 
 # ---------------- UI ----------------
-st.title("Movie Recommender System")
+st.title("🎬 Movie Recommender System")
 
 selected_movie_name = st.selectbox('Select movie', movie['title'].values)
 
 # ---------------- FETCH POSTER ----------------
 def fetch_poster(movie_id):
-    response = requests.get(
-        "https://api.themoviedb.org/3/movie/{}?api_key=f07164adf1a7def0170eeafeeb6bb25a".format(movie_id)
-    )
+    url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key=f07164adf1a7def0170eeafeeb6bb25a"
+    response = requests.get(url)
     data = response.json()
-    return "https://image.tmdb.org/t/p/w500/" + data['poster_path']
+
+    if 'poster_path' in data and data['poster_path'] is not None:
+        return "https://image.tmdb.org/t/p/w500/" + data['poster_path']
+    else:
+        return "https://via.placeholder.com/500x750?text=No+Image"
 
 # ---------------- RECOMMEND FUNCTION ----------------
 def recommend(movie_name):
